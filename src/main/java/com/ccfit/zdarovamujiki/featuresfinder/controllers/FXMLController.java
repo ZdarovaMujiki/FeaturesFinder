@@ -1,8 +1,8 @@
 package com.ccfit.zdarovamujiki.featuresfinder.controllers;
 
 import com.ccfit.zdarovamujiki.featuresfinder.RequestManager;
-import com.ccfit.zdarovamujiki.featuresfinder.deserialized.Feature;
-import com.ccfit.zdarovamujiki.featuresfinder.deserialized.GeoPoint;
+import com.ccfit.zdarovamujiki.featuresfinder.deserialized.FeatureInfo;
+import com.ccfit.zdarovamujiki.featuresfinder.deserialized.GeoPointsList;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -23,23 +23,27 @@ public class FXMLController implements Initializable {
     @FXML private Button findButton;
 
     @FXML private ListView<Button> placesList;
-    @FXML private ListView<Feature> featureList;
+    @FXML private ListView<FeatureInfo> featureList;
 
     @Override
     public void initialize(URL url, ResourceBundle rb) {
         placeLabel.setText("Enter place:");
         placeInputField.setPromptText("Place");
         findButton.setText("Find");
-        featureList.setCellFactory(featureList -> new FeatureListCell());
-        findButton.setOnAction(event -> RequestManager.getGeoPoints(placeInputField.getText()).thenAccept(list -> {
+        featureList.setCellFactory(FeatureListCell::new);
+        findButton.setOnAction(event -> RequestManager.getGeoPoints(placeInputField.getText()).thenAccept(geoPointsList -> {
             ObservableList<Button> buttons = FXCollections.observableArrayList();
-            for (GeoPoint geoPoint: list) {
-                Button button = new Button(geoPoint.getName());
+            for (GeoPointsList.Address address: geoPointsList.getHits()) {
+                Button button = new Button(address.toString());
                 button.setOnAction(event1 -> {
-                    RequestManager.getFeatures(geoPoint.getLng(), geoPoint.getLat())
+                    GeoPointsList.Address.Point point = address.getPoint();
+                    double latitude = point.getLat();
+                    double longitude = point.getLng();
+                    RequestManager.getFeatures(longitude, latitude)
                             .thenAccept(features -> Platform.runLater(() -> featureList.setItems(features)));
-                    RequestManager.getWeather(geoPoint.getLng(), geoPoint. getLat())
-                            .thenAccept(weather -> Platform.runLater(() -> weatherLabel.setText(weather)));
+                    RequestManager.getWeather(longitude, latitude)
+                            .thenAccept(weather -> Platform.runLater(() ->
+                                    weatherLabel.setText(weather.toString())));
                 });
                 buttons.add(button);
             }

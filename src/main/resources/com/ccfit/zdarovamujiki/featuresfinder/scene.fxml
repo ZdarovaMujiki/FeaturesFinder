@@ -6,11 +6,11 @@
 <?import javafx.scene.control.TextField?>
 
 <?import javafx.scene.layout.GridPane?>
-<GridPane xmlns:fx="http://javafx.com/fxml" alignment="CENTER" fx:controller="com.ccfit.zdarovamujiki.featuresfinder.controllers.FXMLController">
+<GridPane xmlns:fx="http://javafx.com/fxml" alignment="CENTER" fx:controller="com.ccfit.zdarovamujiki.featuresfinder.controllers.FXMLController" hgap="5" vgap="5">
     <Label fx:id="placeLabel" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
     <TextField fx:id="placeInputField" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
     <Button fx:id="findButton" GridPane.columnIndex="1" GridPane.rowIndex="1"/>
-    <ListView fx:id="placesList" GridPane.columnIndex="0" GridPane.rowIndex="2" GridPane.columnSpan="2"/>
+    <ListView fx:id="placesList" GridPane.columnIndex="0" GridPane.rowIndex="3" GridPane.columnSpan="2"/>
     <Label fx:id="weatherLabel" GridPane.columnIndex="2" GridPane.rowIndex="0" GridPane.rowSpan="2"/>
-    <ListView fx:id="featureList" GridPane.columnIndex="2" GridPane.rowIndex="2" GridPane.rowSpan="2"/>
+    <ListView fx:id="featureList" GridPane.columnIndex="2" GridPane.rowIndex="3" GridPane.rowSpan="2"/>
 </GridPane>

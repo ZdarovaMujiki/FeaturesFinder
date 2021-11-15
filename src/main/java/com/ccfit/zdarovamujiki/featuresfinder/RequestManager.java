@@ -1,9 +1,11 @@
 package com.ccfit.zdarovamujiki.featuresfinder;
 
-import com.ccfit.zdarovamujiki.featuresfinder.deserialized.Feature;
-import com.ccfit.zdarovamujiki.featuresfinder.deserialized.GeoPoint;
+import com.ccfit.zdarovamujiki.featuresfinder.deserialized.FeatureInfo;
+import com.ccfit.zdarovamujiki.featuresfinder.deserialized.FeatureList;
+import com.ccfit.zdarovamujiki.featuresfinder.deserialized.GeoPointsList;
+import com.ccfit.zdarovamujiki.featuresfinder.deserialized.Weather;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -15,8 +17,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Locale;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
@@ -27,7 +27,9 @@ public class RequestManager {
     private static final ObjectMapper mapper = new ObjectMapper();
     private static final HttpClient client = HttpClient.newHttpClient();
     private static final Properties properties = new Properties();
+
     static {
+        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         try (InputStream stream = ClassLoader.getSystemResourceAsStream("apikeys.properties")) {
             properties.load(stream);
         }
@@ -36,95 +38,96 @@ public class RequestManager {
         }
     }
 
-    static private ArrayList<GeoPoint> readGeoPointsResponse(String response) {
-        GeoPoint[] geoPoints = new GeoPoint[0];
+    private static GeoPointsList readGeoPointsResponse(String response) {
+        GeoPointsList geoPointsList = null;
         try {
-            JsonNode jsonNode = mapper.readValue(response, JsonNode.class);
-            JsonNode jsonArray = jsonNode.get("hits");
-            geoPoints = mapper.readValue(jsonArray.toString(), GeoPoint[].class);
+            geoPointsList = mapper.readValue(response, GeoPointsList.class);
         } catch (JsonProcessingException e) {
             log.log(Level.WARNING,"Error reading geopoints response");
         }
-        return new ArrayList<>(Arrays.asList(geoPoints));
+        return geoPointsList;
     }
 
-    static public CompletableFuture<ArrayList<GeoPoint>> getGeoPoints(String placeName) {
-        placeName = placeName.replace(" ", "");
+    public static CompletableFuture<String> getResponseBody(HttpRequest request) {
+        return client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .thenApply(response -> {
+                    String body = response.body();
+                    if (response.statusCode() != 200) {
+                        log.log(Level.WARNING, "Bad response: " + body);
+                    }
+                    return body;
+                });
+    }
+
+    public static CompletableFuture<GeoPointsList> getGeoPoints(String placeName) {
+        placeName = placeName.replace(" ", "%20");
+
         String key = properties.getProperty("GH_KEY");
         String uri = String.format("%s?limit=%d&q=%s&key=%s",
                Constants.GH_GEOCODES_URL, Constants.GH_GEOCODES_LIMIT, placeName, key);
 
         HttpRequest request = HttpRequest.newBuilder().GET().uri(URI.create(uri)).build();
-        return client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-                .thenApply(HttpResponse::body)
-                .thenApply(RequestManager::readGeoPointsResponse);
+        return getResponseBody(request).thenApply(RequestManager::readGeoPointsResponse);
     }
 
-    static private String readWeatherResponse(String response) {
-        String weatherDescription = "";
-        String temperature = "";
+    private static Weather readWeatherResponse(String response) {
+        Weather weather = null;
         try {
-            JsonNode jsonNode = mapper.readValue(response, JsonNode.class);
-            weatherDescription = jsonNode.get("weather").get(0).get("description").asText();
-            temperature = jsonNode.get("main").get("temp").asText();
+            weather = mapper.readValue(response, Weather.class);
         } catch (JsonProcessingException e) {
             log.log(Level.WARNING, "Error reading weather response");
         }
-        return String.format("Weather: %s, %s C", weatherDescription, temperature);
+        return weather;
     }
-    static public CompletableFuture<String> getWeather(double lng, double lat) {
+
+    public static CompletableFuture<Weather> getWeather(double lng, double lat) {
         String key = properties.getProperty("OW_KEY");
         String uri = String.format(Locale.US, "%s?units=%s&lon=%f&lat=%f&appid=%s",
                 Constants.OW_WEATHER_URL, Constants.MEASURE_UNITS, lng, lat, key);
         HttpRequest request = HttpRequest.newBuilder().GET().uri(URI.create(uri)).build();
-        return client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-                .thenApply(HttpResponse::body)
-                .thenApply(RequestManager::readWeatherResponse);
+        return getResponseBody(request).thenApply(RequestManager::readWeatherResponse);
     }
-    static private Feature readFeatureInfoResponse(String response) {
-        Feature feature = null;
+
+    private static FeatureInfo readFeatureInfoResponse(String response) {
+        FeatureInfo featureInfo = null;
         try {
-            feature = mapper.readValue(response, Feature.class);
+            featureInfo = mapper.readValue(response, FeatureInfo.class);
         } catch (JsonProcessingException e) {
             log.log(Level.WARNING, "Error reading feature info response");
         }
-        return feature;
+        return featureInfo;
     }
-    static private ObservableList<Feature> readFeaturesResponse(String response) {
-        JsonNode[] nodes = new JsonNode[0];
+
+    private static ObservableList<FeatureInfo> readFeaturesResponse(String response) {
+        FeatureList featureList = null;
         try {
-            JsonNode jsonNode = mapper.readValue(response, JsonNode.class);
-            JsonNode jsonArray = jsonNode.get("features");
-            nodes = mapper.readValue(jsonArray.toString(), JsonNode[].class);
+            featureList = mapper.readValue(response, FeatureList.class);
         } catch (JsonProcessingException e) {
             log.log(Level.WARNING, "Error reading weather response");
         }
 
         String key = properties.getProperty("OTM_KEY");
-        ObservableList<Feature> list = FXCollections.observableArrayList();
-        for (JsonNode node: nodes) {
-            if (node.get("properties").get("name").asText().equals("")) {
+        ObservableList<FeatureInfo> featureInfoList = FXCollections.observableArrayList();
+        for (FeatureList.Feature feature: featureList.getFeatures()) {
+            if (feature.getProperties().getName().equals("")) {
                 continue;
             }
-            String xid = node.get("properties").get("xid").asText();
+            String xid = feature.getProperties().getXid();
             String uri = String.format("%s%s?apikey=%s",
                     Constants.OTM_FEATURES_INFO_URL, xid, key);
             HttpRequest request = HttpRequest.newBuilder().GET().uri(URI.create(uri)).build();
-            client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-                    .thenApply(HttpResponse::body)
+            getResponseBody(request)
                     .thenApply(RequestManager::readFeatureInfoResponse)
-                    .thenAccept(list::add);
+                    .thenAccept(featureInfoList::add);
         }
-        return list;
+        return featureInfoList;
     }
 
-    static public CompletableFuture<ObservableList<Feature>> getFeatures(double lng, double lat) {
+    public static CompletableFuture<ObservableList<FeatureInfo>> getFeatures(double lng, double lat) {
         String key = properties.getProperty("OTM_KEY");
         String uri = String.format(Locale.US, "%s?radius=%f&lon=%f&lat=%f&apikey=%s",
                 Constants.OTM_FEATURES_LIST_URL, Constants.OTM_FEATURES_LIST_RADIUS, lng, lat, key);
         HttpRequest request = HttpRequest.newBuilder().GET().uri(URI.create(uri)).build();
-        return client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-                .thenApply(HttpResponse::body)
-                .thenApply(RequestManager::readFeaturesResponse);
+        return getResponseBody(request).thenApply(RequestManager::readFeaturesResponse);
     }
 }
